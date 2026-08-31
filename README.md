@@ -172,7 +172,8 @@ The compose environment supports the DLX+TTL example. The metrics example binds 
 development endpoint on all interfaces so the Prometheus container can scrape it; do not use
 that server configuration unchanged in production.
 
-Run the broker-backed bounded-retry test with `make integration` while Compose is running.
+Run the RabbitMQ integration tests with `make integration`. Docker is required; Testcontainers
+starts and removes an isolated broker for the test run.
 
 ## Contributing
 
