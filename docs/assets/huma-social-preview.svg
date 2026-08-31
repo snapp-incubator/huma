@@ -1,0 +1,62 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 640" role="img" aria-labelledby="title description">
+  <title id="title">Huma RabbitMQ SDK for Go</title>
+  <desc id="description">Reliable RabbitMQ consumers and publishers for Go.</desc>
+  <defs>
+    <linearGradient id="background" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#102631"/>
+      <stop offset=".55" stop-color="#0a1922"/>
+      <stop offset="1" stop-color="#050c11"/>
+    </linearGradient>
+    <radialGradient id="green-glow" cx="0" cy="0" r="1" gradientTransform="translate(135 100) rotate(40) scale(600)">
+      <stop offset="0" stop-color="#16d6a3" stop-opacity=".18"/>
+      <stop offset="1" stop-color="#16d6a3" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="orange-glow" cx="0" cy="0" r="1" gradientTransform="translate(1130 590) rotate(-140) scale(560)">
+      <stop offset="0" stop-color="#f36b21" stop-opacity=".2"/>
+      <stop offset="1" stop-color="#f36b21" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="green-wing" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#37e5b2"/>
+      <stop offset="1" stop-color="#00a97d"/>
+    </linearGradient>
+    <linearGradient id="orange-wing" x1="1" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffad5c"/>
+      <stop offset="1" stop-color="#f36b21"/>
+    </linearGradient>
+    <filter id="mark-shadow" x="-30%" y="-30%" width="160%" height="160%">
+      <feDropShadow dx="0" dy="18" stdDeviation="22" flood-color="#000" flood-opacity=".4"/>
+    </filter>
+  </defs>
+
+  <rect width="1280" height="640" fill="url(#background)"/>
+  <rect width="1280" height="640" fill="url(#green-glow)"/>
+  <rect width="1280" height="640" fill="url(#orange-glow)"/>
+
+  <g fill="none" stroke="#314955" stroke-width="2" opacity=".6">
+    <path d="M0 112h118c27 0 48 21 48 48v31c0 27 21 48 48 48h52"/>
+    <path d="M1280 491h-126c-27 0-48-21-48-48v-30c0-27-21-48-48-48h-48"/>
+    <path d="M854 0v55c0 27 21 48 48 48h86"/>
+  </g>
+  <g>
+    <circle cx="267" cy="239" r="6" fill="#f36b21"/>
+    <circle cx="1009" cy="365" r="6" fill="#37e5b2"/>
+    <circle cx="989" cy="103" r="5" fill="#37e5b2"/>
+  </g>
+
+  <g transform="translate(104 132) scale(.74)" filter="url(#mark-shadow)">
+    <rect width="512" height="512" rx="120" fill="#0b1a23" stroke="#29414d" stroke-width="8"/>
+    <path fill="url(#green-wing)" d="M244 142C195 91 122 78 66 110c61 7 104 32 136 68-43-18-92-14-132 16 61 4 107 29 143 69l43 51V190l-12-48Z"/>
+    <path fill="url(#orange-wing)" d="M268 142c49-51 122-64 178-32-61 7-104 32-136 68 43-18 92-14 132 16-61 4-107 29-143 69l-43 51V190l12-48Z"/>
+    <path fill="#f6fbfd" d="m256 103 31 47-31 34-31-34 31-47Zm-46 154 46 58 46-58-13 116-33 45-33-45-13-116Z"/>
+    <circle cx="256" cy="151" r="6" fill="#0b1a23"/>
+  </g>
+
+  <g font-family="Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+    <text x="542" y="260" fill="#f7fbfc" font-size="126" font-weight="760" letter-spacing="-5">Huma</text>
+    <text x="550" y="329" fill="#37e5b2" font-size="27" font-weight="700" letter-spacing="7">RABBITMQ SDK FOR GO</text>
+    <path d="M550 370h556" stroke="#29414d" stroke-width="2"/>
+    <text x="550" y="418" fill="#b5c6ce" font-size="26" font-weight="430">Consumers, confirms, retries, reconnection,</text>
+    <text x="550" y="456" fill="#b5c6ce" font-size="26" font-weight="430">metrics, and tracing. One focused SDK.</text>
+    <text x="550" y="528" fill="#708995" font-size="19" font-weight="600" letter-spacing="1.5">github.com/snapp-incubator/huma</text>
+  </g>
+</svg>

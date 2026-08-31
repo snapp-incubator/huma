@@ -1,14 +1,21 @@
-# Huma RabbitMQ SDK
+<p align="center">
+  <img src="docs/assets/huma-logo.svg" width="720" alt="Huma RabbitMQ SDK for Go">
+</p>
 
-A Go SDK for RabbitMQ consumers and publishers, built on
-[`rabbitmq/amqp091-go`](https://github.com/rabbitmq/amqp091-go). Huma provides concurrent
-consumers, connection recovery, publisher channel pooling and confirms, bounded retries,
-dead-letter and delayed-delivery helpers, Prometheus metrics, and OpenTelemetry context
-propagation.
+<p align="center">
+  A Go SDK for RabbitMQ consumers and publishers, built on
+  <a href="https://github.com/rabbitmq/amqp091-go"><code>rabbitmq/amqp091-go</code></a>.
+</p>
 
-[![CI](https://github.com/snapp-incubator/huma/actions/workflows/ci.yml/badge.svg)](https://github.com/snapp-incubator/huma/actions/workflows/ci.yml)
-[![Go Reference](https://pkg.go.dev/badge/github.com/snapp-incubator/huma.svg)](https://pkg.go.dev/github.com/snapp-incubator/huma)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+<p align="center">
+  <a href="https://github.com/snapp-incubator/huma/actions/workflows/ci.yml"><img src="https://github.com/snapp-incubator/huma/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <a href="https://pkg.go.dev/github.com/snapp-incubator/huma"><img src="https://pkg.go.dev/badge/github.com/snapp-incubator/huma.svg" alt="Go Reference"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT"></a>
+</p>
+
+Huma provides concurrent consumers, connection recovery, publisher channel pooling and
+confirms, bounded retries, dead-letter and delayed-delivery helpers, Prometheus metrics, and
+OpenTelemetry context propagation.
 
 The latest release is `v0.1.0`. Until `v1.0.0`, minor releases may include breaking API changes.
 

@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title description">
+  <title id="title">Huma icon</title>
+  <desc id="description">A stylized Huma bird with green and orange wings.</desc>
+  <defs>
+    <linearGradient id="panel" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#10232f"/>
+      <stop offset="1" stop-color="#071118"/>
+    </linearGradient>
+    <linearGradient id="green-wing" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#37e5b2"/>
+      <stop offset="1" stop-color="#00a97d"/>
+    </linearGradient>
+    <linearGradient id="orange-wing" x1="1" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffad5c"/>
+      <stop offset="1" stop-color="#f36b21"/>
+    </linearGradient>
+  </defs>
+
+  <rect x="4" y="4" width="504" height="504" rx="116" fill="url(#panel)" stroke="#29414d" stroke-width="8"/>
+  <path fill="url(#green-wing)" d="M244 142C195 91 122 78 66 110c61 7 104 32 136 68-43-18-92-14-132 16 61 4 107 29 143 69l43 51V190l-12-48Z"/>
+  <path fill="url(#orange-wing)" d="M268 142c49-51 122-64 178-32-61 7-104 32-136 68 43-18 92-14 132 16-61 4-107 29-143 69l-43 51V190l12-48Z"/>
+  <path fill="#f6fbfd" d="m256 103 31 47-31 34-31-34 31-47Zm-46 154 46 58 46-58-13 116-33 45-33-45-13-116Z"/>
+  <circle cx="256" cy="151" r="6" fill="#0b1a23"/>
+</svg>
