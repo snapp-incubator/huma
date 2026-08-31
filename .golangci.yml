@@ -1,0 +1,27 @@
+version: "2"
+
+linters:
+  default: none
+  enable:
+    - govet
+    - errcheck
+    - staticcheck
+    - revive
+    - misspell
+  settings:
+    revive:
+      rules:
+        - name: exported
+          arguments:
+            - disableStutteringCheck
+    errcheck:
+      check-type-assertions: true
+  exclusions:
+    rules:
+      - path: "_test\\.go"
+        linters:
+          - errcheck
+
+formatters:
+  enable:
+    - gofumpt
