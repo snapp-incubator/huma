@@ -829,7 +829,7 @@ func (s *connectionState) interrupt(ctx context.Context) error {
 	if contextDeadline, ok := ctx.Deadline(); ok && contextDeadline.Before(deadline) {
 		deadline = contextDeadline
 	}
-	return s.conn.SetDeadline(deadline)
+	return errors.Join(s.conn.SetDeadline(deadline), s.conn.Close())
 }
 
 func (s *connectionState) current(ctx context.Context) net.Conn {

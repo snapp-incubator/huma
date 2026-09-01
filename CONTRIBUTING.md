@@ -2,7 +2,7 @@
 
 ## Local setup
 
-You need Go 1.25+ and Docker (for running RabbitMQ locally).
+You need Go 1.25+ and Docker (for running the Testcontainers-backed RabbitMQ integration tests).
 
 ```
 git clone https://github.com/snapp-incubator/huma.git
@@ -16,7 +16,7 @@ Run the test suite:
 make test
 ```
 
-With the Compose services running, run the RabbitMQ integration test:
+Run the RabbitMQ integration tests. Testcontainers starts and removes an isolated broker:
 
 ```
 make integration
