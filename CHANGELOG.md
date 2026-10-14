@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Changed
+
+- Minimum Go version is now 1.27 (`go 1.27.2` in `go.mod`); dependencies upgraded, including `prometheus/client_golang` 1.25.0.
+
 ## [0.1.0] - 2026-08-31
 
 ### Added

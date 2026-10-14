@@ -21,7 +21,7 @@ The latest release is `v0.1.0`. Until `v1.0.0`, minor releases may include break
 
 ## Requirements
 
-- Go 1.25 or later.
+- Go 1.27 or later.
 - RabbitMQ 4.x for the included examples.
 
 ## Install
