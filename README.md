@@ -115,6 +115,12 @@ The AMQP client cannot interrupt an individual frame write after it starts. Cont
 cancellation is checked before pool acquisition, before publishing, and while waiting for the
 broker confirmation; a network write can still run until the connection deadline or closure.
 
+When a distributed flow must publish an event even after the caller context is canceled (for
+example, after committing local state when an upstream request times out), pass
+`huma.WithIgnoreContextCancellation()` to `Publish`, `BatchPublish`, or
+`PublishWithDelayDLXTTL`. The SDK detaches cancellation while preserving context values such as
+trace spans, `InjectHeaders` data, and metric labels.
+
 Consumers use manual acknowledgements. Handler panics and returned errors follow the same
 retry policy:
 

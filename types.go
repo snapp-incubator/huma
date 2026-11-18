@@ -18,7 +18,10 @@ type SDK struct {
 	channel           *amqp091.Channel
 	ctx               context.Context
 	cancel            context.CancelFunc
+	workerCtx         context.Context
+	workerCancel      context.CancelFunc
 	wg                sync.WaitGroup
+	publishWg         sync.WaitGroup
 	logger            Logger
 	reconnectInterval time.Duration
 	queues            []QueueConfig
@@ -120,8 +123,8 @@ const (
 
 // MsgHandler is the prototype of a function that processes messages.
 //
-// The target context is a context.WithCancel that is canceled on Shutdown, enabling
-// graceful shutdown of heavy processing loops.
+// The handler context is bounded by ProcessTimeout when positive and is canceled if Shutdown
+// exceeds its deadline.
 // The queueName parameter lets a single handler serve multiple queue types.
 type MsgHandler func(ctx context.Context, queueName QueueName, msg RabbitMQMsg) error
 
@@ -175,6 +178,22 @@ type QueueConfig struct {
 // RabbitMQMsg wraps the amqp091 Delivery struct.
 type RabbitMQMsg struct {
 	amqp091.Delivery
+}
+
+type publishOptions struct {
+	ignoreContextCancellation bool
+}
+
+// PublishOption configures optional behavior for publish operations.
+type PublishOption func(*publishOptions)
+
+// WithIgnoreContextCancellation allows a publish call to proceed even when its context is canceled or expired.
+//
+// Context values such as trace spans, custom header hook values, and metric labels are preserved.
+func WithIgnoreContextCancellation() PublishOption {
+	return func(opts *publishOptions) {
+		opts.ignoreContextCancellation = true
+	}
 }
 
 var heartBeatMSG = amqp091.Publishing{

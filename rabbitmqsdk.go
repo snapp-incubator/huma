@@ -26,8 +26,8 @@ const (
 
 // NewSDK is the huma factory method.
 func NewSDK(ctx context.Context, cfg SDKConfig) (RabbitMQKit, error) {
-	if ctx == nil {
-		return nil, errors.New("context is nil")
+	if err := validateContext(ctx); err != nil {
+		return nil, err
 	}
 	if cfg.Addr == "" {
 		return nil, errors.New("RabbitMQ address is required")
@@ -65,7 +65,8 @@ func NewSDK(ctx context.Context, cfg SDKConfig) (RabbitMQKit, error) {
 		reconnectDelay = defaultReconnectDelay
 	}
 
-	sdkCtx, cancel := context.WithCancel(ctx)
+	stopCtx, cancel := context.WithCancel(context.Background())
+	workerCtx, workerCancel := context.WithCancel(context.Background())
 	scheme := "amqp"
 	if cfg.TLSConfig != nil {
 		scheme = "amqps"
@@ -93,31 +94,37 @@ func NewSDK(ctx context.Context, cfg SDKConfig) (RabbitMQKit, error) {
 	}
 	dialer := &net.Dialer{Timeout: dialTimeout}
 	connectionState := &connectionState{}
-	connectionConfig.Dial = func(network, address string) (net.Conn, error) {
-		conn, err := dialer.DialContext(sdkCtx, network, address)
-		if err != nil {
-			return nil, err
+	makeDial := func(dialCtx context.Context) func(network, address string) (net.Conn, error) {
+		return func(network, address string) (net.Conn, error) {
+			conn, err := dialer.DialContext(dialCtx, network, address)
+			if err != nil {
+				return nil, err
+			}
+			deadline := time.Now().Add(dialTimeout)
+			if contextDeadline, ok := dialCtx.Deadline(); ok && contextDeadline.Before(deadline) {
+				deadline = contextDeadline
+			}
+			if err := conn.SetDeadline(deadline); err != nil {
+				return nil, errors.Join(err, conn.Close())
+			}
+			connectionState.set(dialCtx, conn)
+			return conn, nil
 		}
-		deadline := time.Now().Add(dialTimeout)
-		if contextDeadline, ok := sdkCtx.Deadline(); ok && contextDeadline.Before(deadline) {
-			deadline = contextDeadline
-		}
-		if err := conn.SetDeadline(deadline); err != nil {
-			return nil, errors.Join(err, conn.Close())
-		}
-		connectionState.set(sdkCtx, conn)
-		return conn, nil
 	}
+	connectionConfig.Dial = makeDial(ctx)
 
 	conn, err := amqp091.DialConfig(connectionURL, connectionConfig)
 	if err != nil {
 		cancel()
+		workerCancel()
 		return nil, err
 	}
+	connectionConfig.Dial = makeDial(stopCtx)
 
 	ch, err := conn.Channel()
 	if err != nil {
 		cancel()
+		workerCancel()
 		return nil, errors.Join(err, conn.Close())
 	}
 	channelClose := ch.NotifyClose(make(chan *amqp091.Error, 1))
@@ -126,6 +133,7 @@ func NewSDK(ctx context.Context, cfg SDKConfig) (RabbitMQKit, error) {
 	pubPool, err := newPublisherChannelPool(ctx, conn, connectionState.current(ctx), poolSize, poolMaxSize)
 	if err != nil {
 		cancel()
+		workerCancel()
 		return nil, errors.Join(
 			fmt.Errorf("initialize publisher pool: %w", err),
 			ch.Close(),
@@ -142,6 +150,7 @@ func NewSDK(ctx context.Context, cfg SDKConfig) (RabbitMQKit, error) {
 		m, err = newPrometheusMetrics(ctx, cfg.MetricsRegisterer, ns, cfg.MetricLabelName, cfg.MetricLabelValue)
 		if err != nil {
 			cancel()
+			workerCancel()
 			return nil, errors.Join(err, pubPool.close(ctx), ch.Close(), conn.Close())
 		}
 	} else {
@@ -151,8 +160,10 @@ func NewSDK(ctx context.Context, cfg SDKConfig) (RabbitMQKit, error) {
 	sdk := &SDK{
 		conn:                 conn,
 		channel:              ch,
-		ctx:                  sdkCtx,
+		ctx:                  stopCtx,
 		cancel:               cancel,
+		workerCtx:            workerCtx,
+		workerCancel:         workerCancel,
 		logger:               &NoOpLogger{},
 		reconnectInterval:    reconnectDelay,
 		metrics:              m,
@@ -169,7 +180,7 @@ func NewSDK(ctx context.Context, cfg SDKConfig) (RabbitMQKit, error) {
 	}
 
 	sdk.wg.Go(func() {
-		sdk.monitorConnection(sdkCtx, channelClose, connClose)
+		sdk.monitorConnection(stopCtx, channelClose, connClose)
 	})
 
 	return sdk, nil
@@ -419,6 +430,12 @@ func (s *SDK) consume(ctx context.Context, msgs <-chan amqp091.Delivery, q Queue
 	}
 
 	for {
+		if ctx.Err() != nil {
+			s.logger.Infow("@huma.consume",
+				"message", "Stopping consumer",
+				"queue_name", q.Name)
+			return
+		}
 		select {
 		case <-ctx.Done():
 			s.logger.Infow("@huma.consume",
@@ -438,7 +455,10 @@ func (s *SDK) consume(ctx context.Context, msgs <-chan amqp091.Delivery, q Queue
 				continue
 			}
 
-			messageCtx := ctx
+			messageCtx := s.workerCtx
+			if messageCtx == nil {
+				messageCtx = ctx
+			}
 			if s.extractContext != nil {
 				messageCtx = s.extractContext(messageCtx, d)
 			}
@@ -462,7 +482,11 @@ func (s *SDK) consume(ctx context.Context, msgs <-chan amqp091.Delivery, q Queue
 				span.End()
 			}
 		case <-heartbeatC:
-			if err := s.publishAMQP(ctx, "", string(q.Name), heartBeatMSG); err != nil {
+			heartbeatCtx := s.workerCtx
+			if heartbeatCtx == nil {
+				heartbeatCtx = ctx
+			}
+			if err := s.publishAMQP(heartbeatCtx, "", string(q.Name), heartBeatMSG); err != nil {
 				s.logger.Errorw("@huma.consume", "message", "Failed to publish heartbeat", "error", err)
 			}
 			heartbeatTicker.Reset(q.DummyMessageFrequency)
@@ -564,27 +588,28 @@ func deliveryRetryCount(ctx context.Context, headers amqp091.Table) int {
 // Publish publishes a non-delay message to the given exchange or queue.
 //
 // For delay queues, publish to the exchange. For regular queues, publish using the routing key (queue name).
-func (s *SDK) Publish(ctx context.Context, exchange, routingKey string, msg *Message) error {
-	if err := validateContext(ctx); err != nil {
+func (s *SDK) Publish(ctx context.Context, exchange, routingKey string, msg *Message, opts ...PublishOption) error {
+	publishCtx, err := preparePublishContext(ctx, opts)
+	if err != nil {
 		return err
 	}
 	if err := msg.validate(); err != nil {
 		return err
 	}
 
-	if s.enableTracing && trace.SpanContextFromContext(ctx).IsValid() {
-		otel.GetTextMapPropagator().Inject(ctx, AMQPHeaderCarrier(msg.Headers))
+	if s.enableTracing && trace.SpanContextFromContext(publishCtx).IsValid() {
+		otel.GetTextMapPropagator().Inject(publishCtx, AMQPHeaderCarrier(msg.Headers))
 	}
 
 	headers := msg.Headers
 	if s.injectHeaders != nil {
-		headers = s.injectHeaders(ctx, msg.Headers)
+		headers = s.injectHeaders(publishCtx, msg.Headers)
 	}
 	if headers == nil {
 		headers = amqp091.Table{}
 	}
 
-	err := s.publishAMQP(ctx, exchange, routingKey, amqp091.Publishing{
+	err = s.publishAMQP(publishCtx, exchange, routingKey, amqp091.Publishing{
 		Headers:     headers,
 		ContentType: msg.ContentType,
 		Body:        msg.Body,
@@ -594,11 +619,11 @@ func (s *SDK) Publish(ctx context.Context, exchange, routingKey string, msg *Mes
 		Timestamp:   msg.Timestamp,
 	})
 	if err != nil {
-		s.metrics.IncPublishFailed(ctx, chooseQueueNameLabel(ctx, exchange, routingKey))
+		s.metrics.IncPublishFailed(publishCtx, chooseQueueNameLabel(publishCtx, exchange, routingKey))
 		return fmt.Errorf("failed to publish msg on rabbitmq: %w", err)
 	}
 
-	s.metrics.IncPublishSuccess(ctx, chooseQueueNameLabel(ctx, exchange, routingKey))
+	s.metrics.IncPublishSuccess(publishCtx, chooseQueueNameLabel(publishCtx, exchange, routingKey))
 	return nil
 }
 
@@ -611,10 +636,13 @@ func (s *SDK) publishAMQP(ctx context.Context, exchange, routingKey string, publ
 
 	s.publisherMu.RLock()
 	pool := s.publisherPool
-	s.publisherMu.RUnlock()
 	if pool == nil {
+		s.publisherMu.RUnlock()
 		return errors.New("publisher pool is unavailable")
 	}
+	s.publishWg.Add(1)
+	s.publisherMu.RUnlock()
+	defer s.publishWg.Done()
 
 	ch, err := pool.get(poolCtx)
 	if err != nil {
@@ -669,12 +697,13 @@ func (s *SDK) publishAMQP(ctx context.Context, exchange, routingKey string, publ
 // BatchPublish sends multiple messages to the same exchange/routing key.
 //
 // For delay queues, publish to the exchange. For regular queues, use the routing key (queue name).
-func (s *SDK) BatchPublish(ctx context.Context, exchange, routingKey string, messages []*Message) error {
-	if err := validateContext(ctx); err != nil {
+func (s *SDK) BatchPublish(ctx context.Context, exchange, routingKey string, messages []*Message, opts ...PublishOption) error {
+	publishCtx, err := preparePublishContext(ctx, opts)
+	if err != nil {
 		return err
 	}
 	for _, msg := range messages {
-		if err := s.Publish(ctx, exchange, routingKey, msg); err != nil {
+		if err := s.Publish(publishCtx, exchange, routingKey, msg, opts...); err != nil {
 			return err
 		}
 	}
@@ -684,15 +713,16 @@ func (s *SDK) BatchPublish(ctx context.Context, exchange, routingKey string, mes
 // PublishWithDelayDLXTTL publishes a delayed message to the associated delay queue.
 //
 // Only use this when DelayStrategy is DelayDLXTTL.
-func (s *SDK) PublishWithDelayDLXTTL(ctx context.Context, queueName string, msg *Message) error {
-	if err := validateContext(ctx); err != nil {
+func (s *SDK) PublishWithDelayDLXTTL(ctx context.Context, queueName string, msg *Message, opts ...PublishOption) error {
+	publishCtx, err := preparePublishContext(ctx, opts)
+	if err != nil {
 		return err
 	}
 	if err := msg.validate(); err != nil {
 		return err
 	}
 
-	return s.Publish(ctx, "", getDelayQueueName(ctx, queueName), msg)
+	return s.Publish(publishCtx, "", getDelayQueueName(publishCtx, queueName), msg, opts...)
 }
 
 // Shutdown stops all workers and closes RabbitMQ channels and connection.
@@ -703,8 +733,10 @@ func (s *SDK) Shutdown(ctx context.Context) error {
 	s.logger.Infof("Initiating SDK shutdown...")
 	s.shutdownOnce.Do(func() {
 		s.cancel()
-		if err := s.connectionState.interrupt(ctx); err != nil {
-			s.logger.Errorw("@huma.Shutdown", "message", "Failed to interrupt RabbitMQ connection", "error", err)
+		if s.reconnecting.Load() {
+			if err := s.connectionState.interrupt(ctx); err != nil && !errors.Is(err, net.ErrClosed) {
+				s.logger.Errorw("@huma.Shutdown", "message", "Failed to interrupt RabbitMQ connection", "error", err)
+			}
 		}
 	})
 
@@ -715,8 +747,13 @@ func (s *SDK) Shutdown(ctx context.Context) error {
 	}()
 	select {
 	case <-ctx.Done():
+		s.forceStopWorkers(ctx)
 		return fmt.Errorf("wait for SDK shutdown: %w", ctx.Err())
 	case <-done:
+	}
+
+	if s.workerCancel != nil {
+		s.workerCancel()
 	}
 
 	s.closeOnce.Do(func() {
@@ -724,11 +761,27 @@ func (s *SDK) Shutdown(ctx context.Context) error {
 		defer s.mu.Unlock()
 		var closeErrors []error
 		s.publisherMu.Lock()
-		if s.publisherPool != nil {
-			closeErrors = append(closeErrors, s.publisherPool.close(ctx))
-			s.publisherPool = nil
-		}
+		pool := s.publisherPool
+		s.publisherPool = nil
 		s.publisherMu.Unlock()
+
+		publishDone := make(chan struct{})
+		go func() {
+			s.publishWg.Wait()
+			close(publishDone)
+		}()
+		select {
+		case <-ctx.Done():
+			if err := s.connectionState.interrupt(ctx); err != nil && !errors.Is(err, net.ErrClosed) {
+				closeErrors = append(closeErrors, err)
+			}
+			<-publishDone
+		case <-publishDone:
+		}
+
+		if pool != nil {
+			closeErrors = append(closeErrors, pool.close(ctx))
+		}
 		if s.channel != nil {
 			closeErrors = append(closeErrors, s.channel.Close())
 		}
@@ -743,6 +796,34 @@ func (s *SDK) Shutdown(ctx context.Context) error {
 	})
 	s.logger.Infof("SDK shutdown complete.")
 	return s.closeErr
+}
+
+func (s *SDK) forceStopWorkers(ctx context.Context) {
+	if s.workerCancel != nil {
+		s.workerCancel()
+	}
+	if err := s.connectionState.interrupt(ctx); err != nil && !errors.Is(err, net.ErrClosed) {
+		s.logger.Errorw("@huma.Shutdown", "message", "Failed to interrupt RabbitMQ connection", "error", err)
+	}
+}
+
+func preparePublishContext(ctx context.Context, opts []PublishOption) (context.Context, error) {
+	if ctx == nil {
+		return nil, errors.New("context is nil")
+	}
+	var resolved publishOptions
+	for _, opt := range opts {
+		if opt != nil {
+			opt(&resolved)
+		}
+	}
+	if resolved.ignoreContextCancellation {
+		return context.WithoutCancel(ctx), nil
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	return ctx, nil
 }
 
 func chooseQueueNameLabel(ctx context.Context, exchange, routingKey string) string {
