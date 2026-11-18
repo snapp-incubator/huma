@@ -41,17 +41,22 @@ func (m *MockRabbitMQKit) EXPECT() *MockRabbitMQKitMockRecorder {
 }
 
 // BatchPublish mocks base method.
-func (m *MockRabbitMQKit) BatchPublish(ctx context.Context, exchange, routingKey string, messages []*Message) error {
+func (m *MockRabbitMQKit) BatchPublish(ctx context.Context, exchange, routingKey string, messages []*Message, opts ...PublishOption) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "BatchPublish", ctx, exchange, routingKey, messages)
+	varargs := []any{ctx, exchange, routingKey, messages}
+	for _, a := range opts {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "BatchPublish", varargs...)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // BatchPublish indicates an expected call of BatchPublish.
-func (mr *MockRabbitMQKitMockRecorder) BatchPublish(ctx, exchange, routingKey, messages any) *gomock.Call {
+func (mr *MockRabbitMQKitMockRecorder) BatchPublish(ctx, exchange, routingKey, messages any, opts ...any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "BatchPublish", reflect.TypeOf((*MockRabbitMQKit)(nil).BatchPublish), ctx, exchange, routingKey, messages)
+	varargs := append([]any{ctx, exchange, routingKey, messages}, opts...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "BatchPublish", reflect.TypeOf((*MockRabbitMQKit)(nil).BatchPublish), varargs...)
 }
 
 // DeclareQueues mocks base method.
@@ -74,31 +79,41 @@ func (mr *MockRabbitMQKitMockRecorder) DeclareQueues(ctx any, queues ...any) *go
 }
 
 // Publish mocks base method.
-func (m *MockRabbitMQKit) Publish(ctx context.Context, exchange, routingKey string, msg *Message) error {
+func (m *MockRabbitMQKit) Publish(ctx context.Context, exchange, routingKey string, msg *Message, opts ...PublishOption) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Publish", ctx, exchange, routingKey, msg)
+	varargs := []any{ctx, exchange, routingKey, msg}
+	for _, a := range opts {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "Publish", varargs...)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // Publish indicates an expected call of Publish.
-func (mr *MockRabbitMQKitMockRecorder) Publish(ctx, exchange, routingKey, msg any) *gomock.Call {
+func (mr *MockRabbitMQKitMockRecorder) Publish(ctx, exchange, routingKey, msg any, opts ...any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Publish", reflect.TypeOf((*MockRabbitMQKit)(nil).Publish), ctx, exchange, routingKey, msg)
+	varargs := append([]any{ctx, exchange, routingKey, msg}, opts...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Publish", reflect.TypeOf((*MockRabbitMQKit)(nil).Publish), varargs...)
 }
 
 // PublishWithDelayDLXTTL mocks base method.
-func (m *MockRabbitMQKit) PublishWithDelayDLXTTL(ctx context.Context, queueName string, msg *Message) error {
+func (m *MockRabbitMQKit) PublishWithDelayDLXTTL(ctx context.Context, queueName string, msg *Message, opts ...PublishOption) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "PublishWithDelayDLXTTL", ctx, queueName, msg)
+	varargs := []any{ctx, queueName, msg}
+	for _, a := range opts {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "PublishWithDelayDLXTTL", varargs...)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // PublishWithDelayDLXTTL indicates an expected call of PublishWithDelayDLXTTL.
-func (mr *MockRabbitMQKitMockRecorder) PublishWithDelayDLXTTL(ctx, queueName, msg any) *gomock.Call {
+func (mr *MockRabbitMQKitMockRecorder) PublishWithDelayDLXTTL(ctx, queueName, msg any, opts ...any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PublishWithDelayDLXTTL", reflect.TypeOf((*MockRabbitMQKit)(nil).PublishWithDelayDLXTTL), ctx, queueName, msg)
+	varargs := append([]any{ctx, queueName, msg}, opts...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PublishWithDelayDLXTTL", reflect.TypeOf((*MockRabbitMQKit)(nil).PublishWithDelayDLXTTL), varargs...)
 }
 
 // SetLogger mocks base method.

@@ -576,3 +576,148 @@ func TestRabbitMQReconnectsAndRestoresConsumers(t *testing.T) {
 		t.Fatalf("waiting for message after reconnect: %v", ctx.Err())
 	}
 }
+
+func TestRabbitMQPublishWithIgnoreContextCancellation(t *testing.T) {
+	requireIntegration(t)
+	setupTracer(t)
+	ctx := testContext(t)
+	sdk := testSDK(t, huma.SDKConfig{
+		EnableTracing: true,
+	})
+
+	queueName := testQueueName(t, "ignore-cancel")
+	received := make(chan trace.SpanContext, 1)
+	queue := huma.QueueConfig{
+		Name:       queueName,
+		Durable:    true,
+		NumWorkers: 1,
+		Handler: func(ctx context.Context, _ huma.QueueName, _ huma.RabbitMQMsg) error {
+			received <- trace.SpanContextFromContext(ctx)
+			return nil
+		},
+	}
+	if err := sdk.DeclareQueues(ctx, queue); err != nil {
+		t.Fatalf("DeclareQueues() error = %v", err)
+	}
+	if err := sdk.Start(ctx, []huma.QueueConfig{queue}); err != nil {
+		t.Fatalf("Start() error = %v", err)
+	}
+
+	parentCtx, parentSpan := otel.Tracer("huma-integration-test").Start(ctx, "canceled-publish")
+	parentSpanContext := parentSpan.SpanContext()
+	canceledCtx, cancel := context.WithCancel(parentCtx)
+	cancel()
+
+	err := sdk.Publish(
+		canceledCtx,
+		"",
+		string(queueName),
+		huma.NewMessage().WithBody([]byte("publish-anyway")),
+		huma.WithIgnoreContextCancellation(),
+	)
+	parentSpan.End()
+	if err != nil {
+		t.Fatalf("Publish() with WithIgnoreContextCancellation error = %v", err)
+	}
+
+	select {
+	case got := <-received:
+		if !got.IsValid() {
+			t.Fatal("consumer span context is invalid")
+		}
+		if got.TraceID() != parentSpanContext.TraceID() {
+			t.Fatalf("consumer trace ID = %v, want %v", got.TraceID(), parentSpanContext.TraceID())
+		}
+	case <-ctx.Done():
+		t.Fatalf("waiting for message published with canceled context: %v", ctx.Err())
+	}
+}
+
+func TestRabbitMQGracefulShutdownPublishesInFlightEvents(t *testing.T) {
+	requireIntegration(t)
+	ctx := testContext(t)
+
+	appCtx, appCancel := context.WithCancel(context.Background())
+	defer appCancel()
+
+	sdk, err := huma.NewSDK(appCtx, huma.SDKConfig{
+		Addr:                 integrationAddr,
+		Username:             integrationUsername,
+		Password:             integrationPassword,
+		ConnectionName:       fmt.Sprintf("huma-shutdown-test-%d", queueCounter.Add(1)),
+		DialTimeout:          5 * time.Second,
+		ReconnectDelay:       100 * time.Millisecond,
+		PublisherPoolSize:    1,
+		PublisherMaxPoolSize: 2,
+		PublisherPoolWait:    time.Second,
+	})
+	if err != nil {
+		t.Fatalf("NewSDK() error = %v", err)
+	}
+
+	triggerQueue := testQueueName(t, "shutdown-trigger")
+	downstreamQueue := testQueueName(t, "shutdown-downstream")
+	handlerStarted := make(chan struct{})
+	allowFinish := make(chan struct{})
+	var publishErr error
+
+	triggerCfg := huma.QueueConfig{
+		Name:       triggerQueue,
+		Durable:    true,
+		NumWorkers: 1,
+		Handler: func(handlerCtx context.Context, _ huma.QueueName, _ huma.RabbitMQMsg) error {
+			close(handlerStarted)
+			<-allowFinish
+			publishErr = sdk.Publish(handlerCtx, "", string(downstreamQueue), huma.NewMessage().WithBody([]byte("flushed")))
+			return publishErr
+		},
+	}
+	downstreamCfg := huma.QueueConfig{
+		Name:       downstreamQueue,
+		Durable:    true,
+		NumWorkers: 1,
+		Handler: func(context.Context, huma.QueueName, huma.RabbitMQMsg) error {
+			return nil
+		},
+	}
+
+	if err := sdk.DeclareQueues(ctx, triggerCfg, downstreamCfg); err != nil {
+		t.Fatalf("DeclareQueues() error = %v", err)
+	}
+	if err := sdk.Start(ctx, []huma.QueueConfig{triggerCfg}); err != nil {
+		t.Fatalf("Start() error = %v", err)
+	}
+	if err := sdk.Publish(ctx, "", string(triggerQueue), huma.NewMessage().WithBody([]byte("start"))); err != nil {
+		t.Fatalf("Publish() error = %v", err)
+	}
+
+	select {
+	case <-handlerStarted:
+	case <-ctx.Done():
+		t.Fatalf("waiting for handler start: %v", ctx.Err())
+	}
+
+	appCancel()
+	shutdownDone := make(chan error, 1)
+	go func() {
+		shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), operationTimeout)
+		defer shutdownCancel()
+		shutdownDone <- sdk.Shutdown(shutdownCtx)
+	}()
+
+	time.Sleep(100 * time.Millisecond)
+	close(allowFinish)
+
+	select {
+	case err := <-shutdownDone:
+		if err != nil {
+			t.Fatalf("Shutdown() error = %v", err)
+		}
+	case <-ctx.Done():
+		t.Fatalf("waiting for Shutdown: %v", ctx.Err())
+	}
+
+	if publishErr != nil {
+		t.Fatalf("in-flight Publish() during Shutdown error = %v", publishErr)
+	}
+}
